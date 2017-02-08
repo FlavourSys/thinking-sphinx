@@ -4,7 +4,9 @@ class ThinkingSphinx::ActiveRecord::Callbacks::DeltaCallbacks <
   callbacks :after_commit, :before_save
 
   def after_commit
-    return unless !suspended? && delta_indices? && toggled?
+    return unless !suspended? && delta_indices? && processors.any? { |processor|
+      processor.toggled?(instance)
+    }
 
     delta_indices.each do |index|
       index.delta_processor.index index
@@ -16,9 +18,7 @@ class ThinkingSphinx::ActiveRecord::Callbacks::DeltaCallbacks <
   end
 
   def before_save
-    return unless new_or_changed?           &&
-      !ThinkingSphinx::Callbacks.suspended? &&
-      delta_indices?
+    return unless !ThinkingSphinx::Callbacks.suspended? && delta_indices?
 
     processors.each { |processor| processor.toggle instance }
   end
@@ -45,19 +45,11 @@ class ThinkingSphinx::ActiveRecord::Callbacks::DeltaCallbacks <
     @indices ||= config.index_set_class.new :classes => [instance.class]
   end
 
-  def new_or_changed?
-    instance.new_record? || instance.changed?
-  end
-
   def processors
     delta_indices.collect &:delta_processor
   end
 
   def suspended?
     ThinkingSphinx::Callbacks.suspended? || ThinkingSphinx::Deltas.suspended?
-  end
-
-  def toggled?
-    processors.any? { |processor| processor.toggled?(instance) }
   end
 end
